@@ -1,0 +1,6 @@
+{
+  "name": "Andour Heights - Society Business Directory & Neighbor Hub",
+  "description": "Directory for home businesses and local services in Signature Global Andour Heights with direct messaging, ratings, and real-time neighbor communication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
