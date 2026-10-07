@@ -170,6 +170,22 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY_NOTIFS, JSON.stringify(notifications));
   }, [notifications]);
 
+  // Listen for temporary deep-link URL (?provider=...) on app load
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const deepLinkProviderId = params.get('provider');
+      if (deepLinkProviderId) {
+        const found = providers.find((p) => p.id === deepLinkProviderId);
+        if (found) {
+          setSelectedProviderForDetail(found);
+        }
+      }
+    } catch (e) {
+      console.error('Deep-link parse error:', e);
+    }
+  }, [providers]);
+
   // Derived Counts
   const unreadMessagesCount = useMemo(() => {
     return Object.values(conversations).reduce((sum, c) => sum + (c.unreadCount || 0), 0);

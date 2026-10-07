@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ServiceProvider, Review } from '../types';
 import { getRelevantBannerImage } from '../utils/bannerImages';
 import { getProviderServiceItems } from '../utils/pricingData';
@@ -17,6 +17,11 @@ import {
   Sparkles,
   ExternalLink,
   Tag,
+  Copy,
+  Check,
+  Link2,
+  X,
+  MessageCircle,
 } from 'lucide-react';
 
 interface ProviderDetailScreenProps {
@@ -39,6 +44,8 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
   onToggleReviewHelpful,
 }) => {
   const [shareCopied, setShareCopied] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [copiedDeepLink, setCopiedDeepLink] = useState(false);
 
   const bannerImage = getRelevantBannerImage(provider);
   const serviceItems = getProviderServiceItems(provider);
@@ -48,18 +55,66 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
     `Hello ${provider.ownerName}, I live in Andour Heights and saw your ${provider.name} profile on Andour Connect. I'd like to check your services!`
   )}`;
 
-  const handleShare = () => {
+  const totalReviews = provider.reviewCount || provider.reviews.length;
+  const dist = provider.distribution;
+
+  // Generate a rich temporary deep-link text describing the business
+  const shareData = useMemo(() => {
+    // Unique temporary session token
+    const tempToken = Math.random().toString(36).substring(2, 7).toUpperCase();
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    const deepLinkUrl = `${origin}${path}?provider=${encodeURIComponent(provider.id)}&ref=${tempToken}`;
+
+    const topServices = provider.services.slice(0, 3).map((s) => `  • ${s}`).join('\n');
+    const startingRate = serviceItems[0]?.price ? ` (Rates from ${serviceItems[0].price})` : '';
+
+    const text = `🏡 *${provider.name}* (${provider.category})
+⭐ ${provider.rating.toFixed(1)}/5 (${totalReviews} reviews) · Verified Resident Business
+📍 Flat ${provider.flatNo} (${provider.tower}), Signature Global Andour Heights
+👤 Resident Owner: ${provider.ownerName}
+📞 Phone: ${provider.phone}
+
+✨ *Top Services:*
+${topServices}${startingRate}
+
+🔗 *View profile, menu & chat directly on Andour Connect:*
+${deepLinkUrl}
+
+_(Temporary link active for Andour Heights residents · Token #${tempToken})_`;
+
+    return { text, deepLinkUrl, tempToken };
+  }, [provider, totalReviews, serviceItems]);
+
+  const handleOpenShare = () => {
+    setShowShareModal(true);
+  };
+
+  const handleCopyShareText = () => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(
-        `${provider.name} by ${provider.ownerName} (${provider.flatNo}) on Andour Connect - Signature Global Andour Heights.`
-      );
+      navigator.clipboard.writeText(shareData.text);
+      setCopiedDeepLink(true);
       setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
+      setTimeout(() => setCopiedDeepLink(false), 2500);
+      setTimeout(() => setShareCopied(false), 2500);
     }
   };
 
-  const totalReviews = provider.reviewCount || provider.reviews.length;
-  const dist = provider.distribution;
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${provider.name} · Andour Heights`,
+          text: shareData.text,
+          url: shareData.deepLinkUrl,
+        });
+      } catch (e) {
+        handleCopyShareText();
+      }
+    } else {
+      handleCopyShareText();
+    }
+  };
 
   // Percentage calculations for rating distribution bars
   const getPercentage = (count: number) => {
@@ -83,7 +138,7 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-white z-10">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors"
+            className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors cursor-pointer"
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -92,7 +147,7 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onToggleSave(provider.id)}
-              className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors text-white"
+              className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors text-white cursor-pointer"
               aria-label="Save"
             >
               <Heart
@@ -102,10 +157,12 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
               />
             </button>
 
+            {/* Share Button in Top Bar */}
             <button
-              onClick={handleShare}
-              className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors text-white"
-              aria-label="Share"
+              onClick={handleOpenShare}
+              className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center hover:bg-black/60 transition-colors text-white cursor-pointer"
+              aria-label="Share business deep-link"
+              title="Share temporary deep-link text"
             >
               <Share2 className="w-4 h-4" />
             </button>
@@ -127,9 +184,9 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
 
       {/* Share Toast Feedback */}
       {shareCopied && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>Business info copied to clipboard</span>
+          <span>Deep-link text copied to clipboard!</span>
         </div>
       )}
 
@@ -190,6 +247,15 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
             <span>Call</span>
           </a>
         </div>
+
+        {/* Share Button: Generates Temporary Deep-Link Text */}
+        <button
+          onClick={handleOpenShare}
+          className="w-full mt-1.5 py-2.5 px-3 bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-200/80 text-emerald-800 font-semibold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer group"
+        >
+          <Share2 className="w-3.5 h-3.5 text-emerald-700 group-hover:scale-110 transition-transform" />
+          <span>Share Deep-Link with Neighbours</span>
+        </button>
 
         {/* WhatsApp & Alternate Contact Option */}
         <div className="flex items-center justify-between pt-1 text-xs">
@@ -458,6 +524,124 @@ export const ProviderDetailScreen: React.FC<ProviderDetailScreenProps> = ({
           ))}
         </div>
       </div>
+
+      {/* 7. TEMPORARY DEEP-LINK SHARE BOTTOM SHEET */}
+      {showShareModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setShowShareModal(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none animate-in slide-in-from-bottom-5 duration-250 border border-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle on mobile */}
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto -mt-1 mb-2 sm:hidden" />
+
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 pb-1 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                  <Share2 className="w-4 h-4 text-emerald-700" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 font-display leading-tight">
+                    Share Business Deep-Link
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                    Temporary link for WhatsApp & messaging apps
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                aria-label="Close share sheet"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Generated Deep-Link Text Preview Card */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Link2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Generated Message Preview</span>
+                </span>
+                <span className="text-[10px] text-emerald-800 bg-emerald-50 font-medium px-2 py-0.5 rounded-full border border-emerald-100">
+                  Token #{shareData.tempToken}
+                </span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed select-all max-h-48 overflow-y-auto">
+                {shareData.text}
+              </div>
+            </div>
+
+            {/* Quick Share Actions */}
+            <div className="space-y-2 pt-1">
+              {/* WhatsApp Share Button */}
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(shareData.text)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  setShowShareModal(false);
+                  setShareCopied(true);
+                  setTimeout(() => setShareCopied(false), 2500);
+                }}
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-semibold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>Share via WhatsApp</span>
+              </a>
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Copy Text Button */}
+                <button
+                  onClick={handleCopyShareText}
+                  className={`py-2.5 px-3 border font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    copiedDeepLink
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  {copiedDeepLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Copy Text</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Native / Other Apps Share Button */}
+                <button
+                  onClick={handleNativeShare}
+                  className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Other Apps</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Security & Expiry Note */}
+            <div className="p-2.5 bg-slate-100/70 rounded-xl text-[11px] text-slate-500 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0" />
+              <span>
+                Temporary deep-link is active for residents of Signature Global Andour Heights.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
